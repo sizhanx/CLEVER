@@ -16,6 +16,7 @@ def prove_cse(strategy, file1, file2, client, library):
         lazy = True
     else:
         lazy = False
+    # this is loading the original and the upgrades version of the library
     orig = loaderFactory(file1, client)
     if orig is None:
         sys.exit(1)
@@ -29,19 +30,31 @@ def prove_cse(strategy, file1, file2, client, library):
         starttime_wall = time.time()
         
         solver = Solver("z3")
+        """
+        Here we are using the ShadowExplorationEngine engine to run two different program versions in the same
+        symbolic execution instance, as doing so can reduce total number of paths explored and simpler constraints.
+        """
         engine = ShadowExplorationEngine(orig.create_invocation(), upgr.create_invocation(), solver)
         result_struct = engine.explore([], lazy)
 
         if isinstance(result_struct, tuple):
             orig_struct = result_struct[0]
             upgr_struct = result_struct[1]
+            """
+            As described in the paper, function summaries are first-order formulas over input vectors and output vectors
+            A complete function summary should have all the possible inputs and corresponding outputs. We are transforming
+            the exploration results into summaries so that it would be easier for us to compare later.
+            """
             orig_summary = orig_struct.to_summary(unknown)
             upgr_summary = upgr_struct.to_summary(unknown)
         else:
             endtime_wall = time.time()
             exec_time = endtime_wall-starttime_wall
             return COUNTER, result_struct, exec_time
-
+        """
+        If we find out that we have exactly the same summary, then there is no need to generate the assertions and use a
+        prover to prove it.
+        """
         if orig_summary == upgr_summary:
             endtime_wall = time.time()
             exec_time = endtime_wall-starttime_wall
@@ -49,6 +62,9 @@ def prove_cse(strategy, file1, file2, client, library):
             print("#Paths: %d" % len(orig_struct.generated_inputs))
             return PATTERN, None, exec_time
 
+        """
+        In this part, the summary sent to z3 to solve. We would output the solved value to the console
+        """
         assertion = EqualsOrIff(orig_summary, upgr_summary)
         sat = get_model(Not(assertion), "z3")
         endtime_wall = time.time()

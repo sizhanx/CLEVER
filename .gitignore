@@ -4,6 +4,12 @@
 .vscode
 
 ########
+# JetBrains Fleet
+########
+.fleet
+
+
+########
 # Python
 ########
 __pycache__
